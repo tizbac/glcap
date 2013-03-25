@@ -31,8 +31,11 @@ private:
     bool ready;
     bool run;
     int height;
-    float time;
+    double time;
     int width;
+    char* m_data;
+    bool firstframe;
+    double starttime;
 };
 
 #endif // MEDIARECORDER_H

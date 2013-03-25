@@ -23,12 +23,12 @@ MediaRecorder * curr_mediarec = NULL;
 bool recording = false;
 double getcurrenttime()
 {
-  struct timeval t;
-  gettimeofday(&t,NULL);
-  double ti = 0.0;
-  ti = t.tv_sec;
-  ti += t.tv_usec/1000000.0;
-  return ti;
+    struct timeval t;
+    gettimeofday(&t,NULL);
+    double ti = 0.0;
+    ti = t.tv_sec;
+    ti += t.tv_usec/1000000.0;
+    return ti;
 }
 double lastframe = 0.0;
 struct uniformF
@@ -77,7 +77,8 @@ void * GL_lib = 0x0;
 
 void * (*real_dlsym)(void * , const char *) = 0x0;
 
-int width = 0; int height = 0;
+int width = 0;
+int height = 0;
 
 pthread_mutex_t mediarecord_mutex;
 
@@ -97,15 +98,15 @@ __attribute__((constructor)) void OnLoad()
     while ( d->d_tag) {
         switch ( d->d_tag )
         {
-            case DT_HASH:
-                nch = *(int *)(d->d_un.d_ptr + 4);
-                break;
-            case DT_STRTAB:
-                sstrtab = d->d_un.d_ptr;
-                break;
-            case DT_SYMTAB:
-                stab = d->d_un.d_ptr;
-                break;
+        case DT_HASH:
+            nch = *(int *)(d->d_un.d_ptr + 4);
+            break;
+        case DT_STRTAB:
+            sstrtab = d->d_un.d_ptr;
+            break;
+        case DT_SYMTAB:
+            stab = d->d_un.d_ptr;
+            break;
         }
         d++;
     }
@@ -187,8 +188,8 @@ void enterOverlayContext()
     glDisable(GL_SCISSOR_TEST);
     glDisable(GL_STENCIL_TEST);
     glDisable(GL_TEXTURE_CUBE_MAP);
-        glDisable(GL_VERTEX_PROGRAM_ARB);
-        glDisable(GL_FRAGMENT_PROGRAM_ARB);
+    glDisable(GL_VERTEX_PROGRAM_ARB);
+    glDisable(GL_FRAGMENT_PROGRAM_ARB);
     glRenderMode(GL_RENDER);
 
     glDisableClientState(GL_VERTEX_ARRAY);
@@ -202,7 +203,7 @@ void enterOverlayContext()
 
     glGetIntegerv(GL_MAX_TEXTURE_UNITS, &texunits);
 
-    for (int i=texunits-1;i>=0;--i) {
+    for (int i=texunits-1; i>=0; --i) {
         glActiveTexture(GL_TEXTURE0 + i);
         glDisable(GL_TEXTURE_1D);
         glDisable(GL_TEXTURE_2D);
@@ -237,13 +238,13 @@ void leaveOverlayContext()
     glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
     glUseProgram_real(program);
 }
-void drawBox(float x1,float y1,float w , float h)
+void drawBoxInside(float x1,float y1,float w , float h)
 {
     glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
     if (!recording )
-       glColor3f(1.0,1.0,0.0);
+        glColor3f(1.0,1.0,0.0);
     else
-       glColor3f(1.0,0.0,0.0);
+        glColor3f(1.0,0.0,0.0);
     glBegin(GL_QUADS);
     {
         glVertex3f(x1,y1,0);
@@ -252,6 +253,10 @@ void drawBox(float x1,float y1,float w , float h)
         glVertex3f(x1,y1+h,0);
     }
     glEnd();
+   
+}
+void drawBoxOutside(float x1,float y1,float w , float h)
+{
     glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
     glColor3f(0.0,0.0,0.0);
     glBegin(GL_QUADS);
@@ -263,118 +268,222 @@ void drawBox(float x1,float y1,float w , float h)
     }
     glEnd();
 }
-void drawN_A(int x, int y, float scale = 1.0)
+#define SEGW 10.0f
+#define SEGH 30.0f
+void drawN_A_O(int x, int y, float scale = 1.0)
 {
-    drawBox(x,y,5*scale,30*scale);
+    drawBoxOutside(x,y,SEGW*scale,SEGH*scale);
 }
-void drawN_B(int x, int y,float scale = 1.0)
+void drawN_B_O(int x, int y,float scale = 1.0)
 {
-    drawBox(x,y,30*scale+5*scale,5*scale);
+    drawBoxOutside(x,y,SEGH*scale+SEGW*scale,SEGW*scale);
 }
-void drawN_C(int x, int y,float scale = 1.0)
+void drawN_C_O(int x, int y,float scale = 1.0)
 {
-    drawBox(x+30*scale,y,5*scale,30*scale);
+    drawBoxOutside(x+SEGH*scale,y,SEGW*scale,SEGH*scale);
 }
-void drawN_D(int x, int y,float scale = 1.0)
+void drawN_D_O(int x, int y,float scale = 1.0)
 {
-    drawBox(x,y+30*scale-(5.0/2.0)*scale,30*scale+5*scale,5*scale);
+    drawBoxOutside(x,y+SEGH*scale-(SEGW/2.0)*scale,SEGH*scale+SEGW*scale,SEGW*scale);
 }
-void drawN_E(int x, int y,float scale = 1.0)
+void drawN_E_O(int x, int y,float scale = 1.0)
 {
-    drawBox(x,y+30*scale,5*scale,30*scale);
+    drawBoxOutside(x,y+SEGH*scale,SEGW*scale,SEGH*scale);
 }
-void drawN_F(int x, int y,float scale = 1.0)
+void drawN_F_O(int x, int y,float scale = 1.0)
 {
-    drawBox(x,y+60*scale-5*scale,30*scale+5*scale,5*scale);
+    drawBoxOutside(x,y+60*scale-SEGW*scale,SEGH*scale+SEGW*scale,SEGW*scale);
 }
-void drawN_G(int x, int y,float scale = 1.0)
+void drawN_G_O(int x, int y,float scale = 1.0)
 {
-    drawBox(x+30*scale,y+30*scale,5*scale,30*scale);
+    drawBoxOutside(x+SEGH*scale,y+SEGH*scale,SEGW*scale,SEGH*scale);
+}
+void drawN_A_I(int x, int y, float scale = 1.0)
+{
+    drawBoxInside(x,y,SEGW*scale,SEGH*scale);
+}
+void drawN_B_I(int x, int y,float scale = 1.0)
+{
+    drawBoxInside(x,y,SEGH*scale+SEGW*scale,SEGW*scale);
+}
+void drawN_C_I(int x, int y,float scale = 1.0)
+{
+    drawBoxInside(x+SEGH*scale,y,SEGW*scale,SEGH*scale);
+}
+void drawN_D_I(int x, int y,float scale = 1.0)
+{
+    drawBoxInside(x,y+SEGH*scale-(SEGW/2.0)*scale,SEGH*scale+SEGW*scale,SEGW*scale);
+}
+void drawN_E_I(int x, int y,float scale = 1.0)
+{
+    drawBoxInside(x,y+SEGH*scale,SEGW*scale,SEGH*scale);
+}
+void drawN_F_I(int x, int y,float scale = 1.0)
+{
+    drawBoxInside(x,y+60*scale-SEGW*scale,SEGH*scale+SEGW*scale,SEGW*scale);
+}
+void drawN_G_I(int x, int y,float scale = 1.0)
+{
+    drawBoxInside(x+SEGH*scale,y+SEGH*scale,SEGW*scale,SEGH*scale);
 }
 void drawFrapsLikeNumber(int x, int y, int n,float scale = 1.0)
 {
-
     switch ( n )
     {
-        case 8:
-            drawN_A(x,y,scale);
-            drawN_B(x,y,scale);
-            drawN_C(x,y,scale);
-            drawN_D(x,y,scale);
-            drawN_E(x,y,scale);
-            drawN_F(x,y,scale);
-            drawN_G(x,y,scale);
-            break;
-        case 1:
-            drawN_C(x,y,scale);
-            drawN_G(x,y,scale);
-            break;
-        case 2:
-            drawN_B(x,y,scale);
-            drawN_C(x,y,scale);
-            drawN_D(x,y,scale);
-            drawN_E(x,y,scale);
-            drawN_F(x,y,scale);
-            break;
-        case 3:
-            drawN_B(x,y,scale);
-            drawN_C(x,y,scale);
-            drawN_D(x,y,scale);
-            drawN_F(x,y,scale);
-            drawN_G(x,y,scale);
-            break;
-        case 4:
-            drawN_A(x,y,scale);
-            drawN_C(x,y,scale);
-            drawN_D(x,y,scale);
-            drawN_G(x,y,scale);
-            break;
-        case 5:
-            drawN_A(x,y,scale);
-            drawN_B(x,y,scale);
-            drawN_D(x,y,scale);
-            drawN_F(x,y,scale);
-            drawN_G(x,y,scale);
-            break;
-        case 6:
-            drawN_A(x,y,scale);
-            drawN_B(x,y,scale);
-            drawN_D(x,y,scale);
-            drawN_E(x,y,scale);
-            drawN_F(x,y,scale);
-            drawN_G(x,y,scale);
-            break;
-        case 7:
-            drawN_A(x,y,scale);
-            drawN_B(x,y,scale);
-            drawN_C(x,y,scale);
-            drawN_G(x,y,scale);
-            break;
-        case 9:
-            drawN_A(x,y,scale);
-            drawN_B(x,y,scale);
-            drawN_C(x,y,scale);
-            drawN_D(x,y,scale);
-            drawN_F(x,y,scale);
-            drawN_G(x,y,scale);
-            break;
-        case 0:
-            drawN_A(x,y,scale);
-            drawN_B(x,y,scale);
-            drawN_C(x,y,scale);
-            drawN_E(x,y,scale);
-            drawN_F(x,y,scale);
-            drawN_G(x,y,scale);
-            break;
+    case 8:
+        drawN_A_O(x,y,scale);
+        drawN_B_O(x,y,scale);
+        drawN_C_O(x,y,scale);
+        drawN_D_O(x,y,scale);
+        drawN_E_O(x,y,scale);
+        drawN_F_O(x,y,scale);
+        drawN_G_O(x,y,scale);
+        break;
+    case 1:
+        drawN_C_O(x,y,scale);
+        drawN_G_O(x,y,scale);
+        break;
+    case 2:
+        drawN_B_O(x,y,scale);
+        drawN_C_O(x,y,scale);
+        drawN_D_O(x,y,scale);
+        drawN_E_O(x,y,scale);
+        drawN_F_O(x,y,scale);
+        break;
+    case 3:
+        drawN_B_O(x,y,scale);
+        drawN_C_O(x,y,scale);
+        drawN_D_O(x,y,scale);
+        drawN_F_O(x,y,scale);
+        drawN_G_O(x,y,scale);
+        break;
+    case 4:
+        drawN_A_O(x,y,scale);
+        drawN_C_O(x,y,scale);
+        drawN_D_O(x,y,scale);
+        drawN_G_O(x,y,scale);
+        break;
+    case 5:
+        drawN_A_O(x,y,scale);
+        drawN_B_O(x,y,scale);
+        drawN_D_O(x,y,scale);
+        drawN_F_O(x,y,scale);
+        drawN_G_O(x,y,scale);
+        break;
+    case 6:
+        drawN_A_O(x,y,scale);
+        drawN_B_O(x,y,scale);
+        drawN_D_O(x,y,scale);
+        drawN_E_O(x,y,scale);
+        drawN_F_O(x,y,scale);
+        drawN_G_O(x,y,scale);
+        break;
+    case 7:
+        drawN_A_O(x,y,scale);
+        drawN_B_O(x,y,scale);
+        drawN_C_O(x,y,scale);
+        drawN_G_O(x,y,scale);
+        break;
+    case 9:
+        drawN_A_O(x,y,scale);
+        drawN_B_O(x,y,scale);
+        drawN_C_O(x,y,scale);
+        drawN_D_O(x,y,scale);
+        drawN_F_O(x,y,scale);
+        drawN_G_O(x,y,scale);
+        break;
+    case 0:
+        drawN_A_O(x,y,scale);
+        drawN_B_O(x,y,scale);
+        drawN_C_O(x,y,scale);
+        drawN_E_O(x,y,scale);
+        drawN_F_O(x,y,scale);
+        drawN_G_O(x,y,scale);
+        break;
 
     }
+    switch ( n )
+    {
+    case 8:
+        drawN_A_I(x,y,scale);
+        drawN_B_I(x,y,scale);
+        drawN_C_I(x,y,scale);
+        drawN_D_I(x,y,scale);
+        drawN_E_I(x,y,scale);
+        drawN_F_I(x,y,scale);
+        drawN_G_I(x,y,scale);
+        break;
+    case 1:
+        drawN_C_I(x,y,scale);
+        drawN_G_I(x,y,scale);
+        break;
+    case 2:
+        drawN_B_I(x,y,scale);
+        drawN_C_I(x,y,scale);
+        drawN_D_I(x,y,scale);
+        drawN_E_I(x,y,scale);
+        drawN_F_I(x,y,scale);
+        break;
+    case 3:
+        drawN_B_I(x,y,scale);
+        drawN_C_I(x,y,scale);
+        drawN_D_I(x,y,scale);
+        drawN_F_I(x,y,scale);
+        drawN_G_I(x,y,scale);
+        break;
+    case 4:
+        drawN_A_I(x,y,scale);
+        drawN_C_I(x,y,scale);
+        drawN_D_I(x,y,scale);
+        drawN_G_I(x,y,scale);
+        break;
+    case 5:
+        drawN_A_I(x,y,scale);
+        drawN_B_I(x,y,scale);
+        drawN_D_I(x,y,scale);
+        drawN_F_I(x,y,scale);
+        drawN_G_I(x,y,scale);
+        break;
+    case 6:
+        drawN_A_I(x,y,scale);
+        drawN_B_I(x,y,scale);
+        drawN_D_I(x,y,scale);
+        drawN_E_I(x,y,scale);
+        drawN_F_I(x,y,scale);
+        drawN_G_I(x,y,scale);
+        break;
+    case 7:
+        drawN_A_I(x,y,scale);
+        drawN_B_I(x,y,scale);
+        drawN_C_I(x,y,scale);
+        drawN_G_I(x,y,scale);
+        break;
+    case 9:
+        drawN_A_I(x,y,scale);
+        drawN_B_I(x,y,scale);
+        drawN_C_I(x,y,scale);
+        drawN_D_I(x,y,scale);
+        drawN_F_I(x,y,scale);
+        drawN_G_I(x,y,scale);
+        break;
+    case 0:
+        drawN_A_I(x,y,scale);
+        drawN_B_I(x,y,scale);
+        drawN_C_I(x,y,scale);
+        drawN_E_I(x,y,scale);
+        drawN_F_I(x,y,scale);
+        drawN_G_I(x,y,scale);
+        break;
+
+    }
+    
 
 }
 
 void drawFrapsLikeFps(int fps,float scale = 1.0)
 {
     int x = width;
-    int numbersize = 30+5*scale+5;
+    int numbersize = SEGH*scale+SEGW*scale+SEGW*scale;
     while ( fps > 0 )
     {
         x -= numbersize;
@@ -397,13 +506,13 @@ extern "C" {
         if ( !data || oldwidth != width || oldheiht != height)
         {
             if ( !data )
-                 data = malloc(width*height*4);
+                data = malloc(width*height*4);
             else
                 data = realloc(data,width*height*4);
             printf("width=%d,height=%d\n",width,height);
 
         }
-        
+
         enterOverlayContext();
         if ( first_frame )
         {
@@ -413,13 +522,13 @@ extern "C" {
         }
         if ( recording )
         {
-	    if ( curr_mediarec->isReady() )
-	    {
-		glPixelStorei(GL_PACK_ALIGNMENT,4);
-		glBindTexture(GL_TEXTURE_2D,cap_tex);
-		glCopyTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,0,0,width,height,0);
-	    }
-            
+            if ( curr_mediarec->isReady() )
+            {
+                glPixelStorei(GL_PACK_ALIGNMENT,4);
+                glBindTexture(GL_TEXTURE_2D,cap_tex);
+                glCopyTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,0,0,width,height,0);
+            }
+
         }
         double currfps = (1.0/(getcurrenttime()-lastframe));
         framerates.push_back(currfps);
@@ -431,50 +540,64 @@ extern "C" {
             avg += *it;
         }
         avg /= (double)framerates.size();
-        drawFrapsLikeFps((int)(avg+0.1));
+        avg = std::min(avg,999.0);
         lastframe = getcurrenttime();
-        
+        drawFrapsLikeFps((int)(avg+0.1),0.5);
 
-        glXSwapBuffers_real(dpy,Drawable);
-	if ( recording && curr_mediarec->isReady() )
-	{
-	    glColor4f(1,1,1,1);
-	    glEnable(GL_TEXTURE_2D);
-	    glBegin(GL_QUADS);
-	      glTexCoord2f(0,0);
-	      glVertex3f(0,0,0);
-	      glTexCoord2f(1,0);
-	      glVertex3f(width,0,0);
-	      glTexCoord2f(1,1);
-	      glVertex3f(width,height,0);
-	      glTexCoord2f(0,1);
-	      glVertex3f(0,height,0);
-	    glEnd();
-	    glBindTexture(GL_TEXTURE_2D,render_tex);
-	    glCopyTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,0,0,width,height,0);
-	    glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,data);
+
+        
+        
+        
+        if ( recording && curr_mediarec->isReady() )
+        {
+       /*     glEnable(GL_TEXTURE_2D);
+            glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT );
+            glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
+            glDisable(GL_COLOR_MATERIAL);
+            glBindTexture(GL_TEXTURE_2D,cap_tex);
+            glColor4f(1,1,1,1);
+            
+            glBegin(GL_QUADS);
+            glTexCoord2f(0,0);
+            glVertex3f(0,0,0);
+            glTexCoord2f(1,0);
+            glVertex3f(width,0,0);
+            glTexCoord2f(1,1);
+            glVertex3f(width,height,0);
+            glTexCoord2f(0,1);
+            glVertex3f(0,height,0);
+            glEnd();*/
+            glBindTexture(GL_TEXTURE_2D,cap_tex);
+       //     glCopyTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,0,0,width,height,0);
+            glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,data);
             //memset(data,width*height*4,125);
             pthread_mutex_lock(&mediarecord_mutex);
-            //curr_mediarec->AppendFrame(0.0,width,height,data);
+            curr_mediarec->AppendFrame(0.0,width,height,data);//POINTER MUST BE VALID UNTIL NEXT FRAME
             pthread_mutex_unlock(&mediarecord_mutex);
-	}
-	
-	leaveOverlayContext();
+        }
+        glXSwapBuffers_real(dpy,Drawable);
+        leaveOverlayContext();
+
     }
 
     void XNextEvent(void * display, XEvent * event)
     {
         XNextEvent_real(display,event);
-        if ( event->type == KeyPress )
+        if ( event->type == KeyPress  )
         {
-           // printf("%x\n",event->xkey.keycode);
+            // printf("%x\n",event->xkey.keycode);
             if ( event->xkey.keycode == 0x60 /*F12*/)
             {
                 recording = !recording;
                 pthread_mutex_lock(&mediarecord_mutex);
-            
+
                 if ( recording )
+                {
+                    char * homedir = getenv("HOME"); 
+                    
+                    
                     curr_mediarec = new MediaRecorder("/home/tiziano/test_cap.avi",width,height);
+                }
                 if ( !recording )
                 {
                     delete curr_mediarec;
@@ -510,8 +633,8 @@ static void *_dlopen(const char *filename, int flag)
 #define DL_DECLSYM(s) if ( strcmp(__name,#s) == 0 ) { return &s ; }
 
 #define DL_DEFS \
-    DL_DECLSYM(glXSwapBuffers)
-
+    DL_DECLSYM(glXSwapBuffers)\
+    DL_DECLSYM(XNextEvent)
 
 
 
@@ -524,7 +647,7 @@ extern "C" {
         if ( l > 3 && __name[l-1] == 'B' && __name[l-2] == 'R' && __name[l-3] == 'A')
         {
             __name[l-3] = 0x0;
-        }else{
+        } else {
             return NULL;
         }
         DL_DEFS;
