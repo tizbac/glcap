@@ -1,4 +1,5 @@
-#define __USE_GNU
+
+
 #include <iostream>
 #include <map>
 #include <list>
@@ -16,10 +17,19 @@
 #include <X11/Xlib.h>
 #include <X11/keysymdef.h>
 #undef XNextEvent
-#include <sys/time.h>
+#include <ctime>
 #include "mediarecorder.h"
+#include <sys/time.h>
 MediaRecorder * curr_mediarec = NULL;
 //f
+size_t strftime_c(char *s, size_t max, const char *format)
+{
+   struct tm *tmp;
+    time_t  t;
+    t = time(NULL);
+    tmp = localtime(&t);
+    return strftime(s,max,format,tmp); 
+}
 bool recording = false;
 double getcurrenttime()
 {
@@ -593,10 +603,13 @@ extern "C" {
 
                 if ( recording )
                 {
+                    
                     char * homedir = getenv("HOME"); 
-                    
-                    
-                    curr_mediarec = new MediaRecorder("/home/tiziano/test_cap.avi",width,height);
+                    char date[512];
+                    strftime_c(date,511,"%F %r");
+                    char filename[1024];
+                    sprintf(filename,"%s/GLCAP %s.avi",homedir,date);
+                    curr_mediarec = new MediaRecorder(filename,width,height);
                 }
                 if ( !recording )
                 {

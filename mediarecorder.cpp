@@ -5,7 +5,7 @@ extern "C" {
 #include <avcodec.h>
 #include <avformat.h>
 #include <swscale.h>
-#include <avutil.h>
+//#include <avutil.h>
 }
 #include <pthread.h>
 #include <sys/time.h>
