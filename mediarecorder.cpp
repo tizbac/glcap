@@ -7,8 +7,11 @@ extern "C" {
 #include <swscale.h>
 #include <avutil.h>
 }
+#include <pthread.h>
 #include <sys/time.h>
 #include "mediarecorder.h"
+
+
 float getcurrenttime2()
 {
   struct timeval t;
@@ -40,12 +43,22 @@ static AVFrame *alloc_picture(int pix_fmt, int width, int height)
     picture->height = height;
     return picture;
 }
-
+#ifndef AV_CODEC_ID_MPEG4
+#define AV_CODEC_ID_MPEG4 CODEC_ID_MPEG4
+#endif
 
 MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
 {
-    av_log_set_level(AV_LOG_VERBOSE); 
+    run = true;
+    ready = false;
+    this->width = width;
+    this->height = height;
+    pthread_mutex_init(&encode_mutex,NULL);
+    pthread_create(&encode_thread,NULL,(void*(*)(void*))&MediaRecorder::EncodingThread,this);
+    pthread_cond_init(&encode_cond,NULL);
+    av_log_set_level(AV_LOG_DEBUG);
     outCtx = avformat_alloc_context();
+
     outCtx->oformat = av_guess_format(NULL, outfile, NULL);
     snprintf(outCtx->filename, sizeof(outCtx->filename), "%s", outfile);
     codec = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
@@ -56,7 +69,7 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     ctx->bit_rate = 1000000;
    ctx->time_base.den = 30;
     ctx->time_base.num = 1;
-    ctx->trellis = 0;
+  /*  ctx->trellis = 0;
     ctx->me_pre_cmp = 0;
     ctx->me_cmp = 0;
     ctx->me_sub_cmp = 0;
@@ -73,18 +86,19 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     ctx->trellis = 0;
     ctx->flags &= ~CODEC_FLAG_CBP_RD;
     ctx->flags &= ~CODEC_FLAG_QP_RD;
-    ctx->flags &= ~CODEC_FLAG_MV0;
+    ctx->flags &= ~CODEC_FLAG_MV0;*/
     ctx->pix_fmt = PIX_FMT_YUV420P;
+
+
+
+    if (avcodec_open2(ctx, codec, NULL) < 0) {
+        fprintf(stderr, "Could not open codec\n");
+    }
     AVStream* s = av_new_stream(outCtx,0);
     s->codec = ctx;
     s->r_frame_rate.den = 30;
     s->r_frame_rate.num = 1;
 
-
-    if (avcodec_open2(ctx, codec, NULL) < 0) {
-        fprintf(stderr, "Could not open codec\n");
-    } 
-    
     picture = alloc_picture(PIX_FMT_YUV420P, ctx->width, ctx->height);
     if (!picture) {
         fprintf(stderr, "Could not allocate picture\n");
@@ -92,12 +106,12 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     }
     tmp_picture = NULL;
 
-    tmp_picture = alloc_picture(PIX_FMT_RGB0, ctx->width, ctx->height);
+    tmp_picture = alloc_picture(PIX_FMT_RGBA, ctx->width, ctx->height);
     if (!tmp_picture) {
         fprintf(stderr, "Could not allocate temporary picture\n");
         exit(1);
     }
-    
+
     img_convert_ctx = sws_getContext(ctx->width, ctx->height,
                                             PIX_FMT_RGBA,
                                             ctx->width, ctx->height,
@@ -115,6 +129,10 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
 
 MediaRecorder::~MediaRecorder()
 {
+    run = false;
+    ready = false;
+    pthread_cond_broadcast(&encode_cond);
+    pthread_join(&encode_thread,NULL);
     av_write_trailer(outCtx);
     av_free(picture);
     avformat_free_context(outCtx);
@@ -122,6 +140,28 @@ MediaRecorder::~MediaRecorder()
 int fcount = 0;
 void MediaRecorder::AppendFrame(float time, int width, int height, char* data)
 {
+    this->time = time;
+    this->height = height;
+    this->width = width;
+    for ( int y = 0; y < height; y++ )
+    {
+        /*for ( int x = 0; x < width; x++ )
+        {*/
+           char r,g,b;
+           int oldindex = (y*width);
+           int newindex = ((height-1-y)*width);
+           memcpy(&tmp_picture->data[0][(newindex)*4],&data[oldindex*4],width*4);
+          /* r = data[oldindex*4+0];
+           g = data[oldindex*4+1];
+           b = data[oldindex*4+2];
+           tmp_picture->data[0][(newindex)*4+0] = r;
+           tmp_picture->data[0][(newindex)*4+1] = g;
+           tmp_picture->data[0][(newindex)*4+2] = b; */
+     // }
+
+   }
+    pthread_cond_broadcast(&encode_cond);
+
    /*int i = 0;
     unsigned int numpixels = width * height;
     unsigned int ui = numpixels;
@@ -140,50 +180,52 @@ void MediaRecorder::AppendFrame(float time, int width, int height, char* data)
                 picture->data[0][vi++] = ( (112*sR - 94*sG - 18*sB + 128) >> 8) + 128;
             }
             i++;
-            
+
         }
     }*/
-   printf("Start flip %f\n",(float)getcurrenttime2());
-   
-    for ( int y = 0; y < height; y++ )
-    {
-        /*for ( int x = 0; x < width; x++ )
-        {*/
-           char r,g,b;
-           int oldindex = (y*width);
-           int newindex = ((height-1-y)*width);
-           memcpy(&tmp_picture->data[0][(newindex)*4],&data[oldindex*4],width*4);
-          /* r = data[oldindex*4+0];
-           g = data[oldindex*4+1];
-           b = data[oldindex*4+2];
-           tmp_picture->data[0][(newindex)*4+0] = r;
-           tmp_picture->data[0][(newindex)*4+1] = g;
-           tmp_picture->data[0][(newindex)*4+2] = b; */
-     // }
-       
-   }
+
+
   // printf("End flip %f\n",(float)getcurrenttime2());
-    
+
     //memcpy(tmp_picture->data[0],data,width*height*4);
-    sws_scale(img_convert_ctx,tmp_picture->data,tmp_picture->linesize,0,height,picture->data,picture->linesize);
 
-    
-    AVPacket p;
-  
-    av_init_packet(&p);
-    p.data = NULL;
-    p.size = 0;
-    picture->pts = ++fcount;
-    int got_frame;
-    printf("%p %p\n",ctx, picture);
-    if(avcodec_encode_video2(ctx, &p, picture, &got_frame) < 0) return;
-    if(got_frame)
+}
+
+void MediaRecorder::EncodingThread()
+{
+    while ( run )
     {
-        
-        // outContainer is "mp4"
-        av_interleaved_write_frame(outCtx, &p);
+        ready = true;
+        pthread_cond_wait(&encode_cond,&encode_mutex);
+        ready = false;
+        if (!run)
+            break;
+        sws_scale(img_convert_ctx,tmp_picture->data,tmp_picture->linesize,0,height,picture->data,picture->linesize);
 
-        av_free_packet(&p);
+
+        AVPacket p;
+
+        av_init_packet(&p);
+        p.data = NULL;
+        p.size = 0;
+        picture->pts = ++fcount;
+        int got_frame;
+        printf("%p %p\n",ctx, picture);
+        if(avcodec_encode_video2(ctx, &p, picture, &got_frame) < 0) return;
+        if(got_frame)
+        {
+
+            // outContainer is "mp4"
+            av_interleaved_write_frame(outCtx, &p);
+
+            av_free_packet(&p);
+        }
+        printf("End enc frame %f\n",(float)getcurrenttime2());
+
     }
-    printf("End enc frame %f\n",(float)getcurrenttime2());
+}
+
+bool MediaRecorder::isReady()
+{
+  return ready;
 }

@@ -122,7 +122,7 @@ __attribute__((constructor)) void OnLoad()
 
 
 
-    GL_lib = dlopen("libGL.so",RTLD_LAZY);
+    GL_lib = dlopen("libGL.so.1",RTLD_LAZY);
     printf("libGL.so opened: %p\n",GL_lib);
     if ( !GL_lib )
     {
@@ -164,7 +164,7 @@ void enterOverlayContext()
     glGetIntegerv(GL_CURRENT_PROGRAM, &program);
     glDisable(GL_ALPHA_TEST);
     glDisable(GL_AUTO_NORMAL);
-   // glViewport(0, 0, width, height);
+    glViewport(0, 0, width, height);
     // Skip clip planes, there are thousands of them.
     glDisable(GL_COLOR_LOGIC_OP);
     glDisable(GL_COLOR_TABLE);
@@ -385,6 +385,7 @@ void drawFrapsLikeFps(int fps,float scale = 1.0)
 char * data = NULL;
 bool first_frame = true;
 GLint cap_tex;
+GLint render_tex;
 extern "C" {
     __attribute__((visibility("default")))
     void glXSwapBuffers(void * dpy,void *  Drawable)
@@ -407,23 +408,22 @@ extern "C" {
         if ( first_frame )
         {
             glGenTextures(1,&cap_tex);
-            
+            glGenTextures(1,&render_tex);
             first_frame = false;
         }
         if ( recording )
         {
-            glPixelStorei(GL_PACK_ALIGNMENT,4);
-            glBindTexture(GL_TEXTURE_2D,cap_tex);
-            glCopyTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,0,0,width,height,0);
-            glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,data);
-            //memset(data,width*height*4,125);
-            pthread_mutex_lock(&mediarecord_mutex);
-            curr_mediarec->AppendFrame(0.0,width,height,data);
-            pthread_mutex_unlock(&mediarecord_mutex);
+	    if ( curr_mediarec->isReady() )
+	    {
+		glPixelStorei(GL_PACK_ALIGNMENT,4);
+		glBindTexture(GL_TEXTURE_2D,cap_tex);
+		glCopyTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,0,0,width,height,0);
+	    }
+            
         }
         double currfps = (1.0/(getcurrenttime()-lastframe));
         framerates.push_back(currfps);
-        if ( framerates.size() > 5 )
+        if ( framerates.size() > 16 )
             framerates.pop_front();
         double avg = 0.0f;
         for ( std::list<double>::iterator it = framerates.begin(); it != framerates.end(); it++ )
@@ -433,9 +433,33 @@ extern "C" {
         avg /= (double)framerates.size();
         drawFrapsLikeFps((int)(avg+0.1));
         lastframe = getcurrenttime();
-        leaveOverlayContext();
+        
 
         glXSwapBuffers_real(dpy,Drawable);
+	if ( recording && curr_mediarec->isReady() )
+	{
+	    glColor4f(1,1,1,1);
+	    glEnable(GL_TEXTURE_2D);
+	    glBegin(GL_QUADS);
+	      glTexCoord2f(0,0);
+	      glVertex3f(0,0,0);
+	      glTexCoord2f(1,0);
+	      glVertex3f(width,0,0);
+	      glTexCoord2f(1,1);
+	      glVertex3f(width,height,0);
+	      glTexCoord2f(0,1);
+	      glVertex3f(0,height,0);
+	    glEnd();
+	    glBindTexture(GL_TEXTURE_2D,render_tex);
+	    glCopyTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,0,0,width,height,0);
+	    glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,data);
+            //memset(data,width*height*4,125);
+            pthread_mutex_lock(&mediarecord_mutex);
+            //curr_mediarec->AppendFrame(0.0,width,height,data);
+            pthread_mutex_unlock(&mediarecord_mutex);
+	}
+	
+	leaveOverlayContext();
     }
 
     void XNextEvent(void * display, XEvent * event)
