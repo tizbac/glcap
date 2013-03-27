@@ -1,6 +1,20 @@
 /*
- *
- */
+ * Fraps clone for linux
+Copyright (C) 2013  Tiziano Bacocco
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 extern "C" {
 #include <avcodec.h>
 #include <avformat.h>
@@ -63,9 +77,9 @@ static void context_state_callback(pa_context *c, void *userdata) {
     int ret;
     pa_context_set_state_callback(ctx, context_state_callback, NULL);
     pa_mainloop_run(m,&ret);
-    
+
     std::cout << "Use source: " << monitorsources[defaultsink] << std::endl;
-    
+
     static const pa_sample_spec ss = {
         .format = PA_SAMPLE_S16LE,
         .rate = 44100,
@@ -84,7 +98,7 @@ static void context_state_callback(pa_context *c, void *userdata) {
     {
         pa_simple_read(s,buf,sizeof(buf),&error);
         fwrite(buf,1024,1,f);
-        
+
     }
     return 0;
 }*/
@@ -92,12 +106,12 @@ static void context_state_callback(pa_context *c, void *userdata) {
 
 double getcurrenttime2()
 {
-  struct timeval t;
-  gettimeofday(&t,NULL);
-  double ti = 0.0;
-  ti = t.tv_sec;
-  ti += t.tv_usec/1000000.0;
-  return ti;
+    struct timeval t;
+    gettimeofday(&t,NULL);
+    double ti = 0.0;
+    ti = t.tv_sec;
+    ti += t.tv_usec/1000000.0;
+    return ti;
 }
 static AVFrame *alloc_picture(int pix_fmt, int width, int height)
 {
@@ -154,8 +168,8 @@ void MediaRecorder::RecordingThread()
 MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
 {
     /* INIT SOUND RECORDING */
-    
-    
+
+
     audio_samples_written = 0;
     pa_context* pactx;
     pa_mainloop * m = pa_mainloop_new();
@@ -167,21 +181,21 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     pa_context_set_state_callback(pactx, context_state_callback, this);
     pa_mainloop_run(m,&ret);
     std::cout << "Use source: " << monitorsources[defaultsink] << std::endl;
-    
+
     static const pa_sample_spec ss = {
         .format = PA_SAMPLE_S16LE,
         .rate = 44100,
         .channels = 2
     };
     pa_context_disconnect(pactx);
-    
+
     int error;
     s = pa_simple_new(NULL,"GLCAP Record",PA_STREAM_RECORD,monitorsources[defaultsink].c_str(), "record", &ss, NULL,NULL , &error);
     if ( !s )
     {
         printf("Cannot create pa_simple\n");
     }
-    
+
     run = true;
     ready = false;
     firstframe = true;
@@ -191,7 +205,7 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     pthread_mutex_init(&sound_buffer_lock,NULL);
     pthread_cond_init(&encode_cond,NULL);
     pthread_create(&encode_thread,NULL,(void*(*)(void*))&MediaRecorder::EncodingThread,this);
-    
+
 
     av_log_set_level(AV_LOG_DEBUG);
     outCtx = avformat_alloc_context();
@@ -224,10 +238,10 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     actx->time_base.den = 44100;
     actx->time_base.num = 1;
     actx->bit_rate = 128000;
-    
-   /* ctx->compression_level = 0;
-    ctx->trellis = 0;
-    ctx->gop_size = 1; /* emit one intra frame every ten frames */
+
+    /* ctx->compression_level = 0;
+     ctx->trellis = 0;
+     ctx->gop_size = 1; /* emit one intra frame every ten frames */
     /*ctx->me_pre_cmp = 0;
     ctx->me_cmp = 0;
     ctx->me_sub_cmp = 0;
@@ -264,7 +278,7 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     s->r_frame_rate.num = 1;
     AVStream* as = av_new_stream(outCtx,1);
     as->codec = actx;
-    
+
     picture = alloc_picture(PIX_FMT_YUV420P, ctx->width, ctx->height);
     if (!picture) {
         fprintf(stderr, "Could not allocate picture\n");
@@ -279,10 +293,10 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     }
 
     img_convert_ctx = sws_getContext(ctx->width, ctx->height,
-                                            PIX_FMT_RGBA,
-                                            ctx->width, ctx->height,
-                                            PIX_FMT_YUV420P,
-                                            SWS_FAST_BILINEAR , NULL, NULL, NULL);
+                                     PIX_FMT_RGBA,
+                                     ctx->width, ctx->height,
+                                     PIX_FMT_YUV420P,
+                                     SWS_FAST_BILINEAR , NULL, NULL, NULL);
     if (img_convert_ctx == NULL) {
         fprintf(stderr,
                 "Cannot initialize the conversion context\n");
@@ -323,30 +337,30 @@ void MediaRecorder::AppendFrame(float time, int width, int height, char* data)
     m_data = data;
     pthread_cond_broadcast(&encode_cond);
 
-   /*int i = 0;
-    unsigned int numpixels = width * height;
-    unsigned int ui = numpixels;
-    unsigned int vi = numpixels + numpixels / 4;
-    for ( int j = 0; j < height; j++ )
-    {
-        for ( int k = 0; k < width; k++ )
-        {
-            int sR = data[i*4+0];
-            int sG = data[i*4+1];
-            int sB = data[i*4+2];
-            picture->data[0][i] = ( (66*sR + 129*sG + 25*sB + 128) >> 8) + 16;
-            if (0 == j%2 && 0 == k%2)
-            {
-                picture->data[0][ui++] = ( (-38*sR - 74*sG + 112*sB + 128) >> 8) + 128;
-                picture->data[0][vi++] = ( (112*sR - 94*sG - 18*sB + 128) >> 8) + 128;
-            }
-            i++;
+    /*int i = 0;
+     unsigned int numpixels = width * height;
+     unsigned int ui = numpixels;
+     unsigned int vi = numpixels + numpixels / 4;
+     for ( int j = 0; j < height; j++ )
+     {
+         for ( int k = 0; k < width; k++ )
+         {
+             int sR = data[i*4+0];
+             int sG = data[i*4+1];
+             int sB = data[i*4+2];
+             picture->data[0][i] = ( (66*sR + 129*sG + 25*sB + 128) >> 8) + 16;
+             if (0 == j%2 && 0 == k%2)
+             {
+                 picture->data[0][ui++] = ( (-38*sR - 74*sG + 112*sB + 128) >> 8) + 128;
+                 picture->data[0][vi++] = ( (112*sR - 94*sG - 18*sB + 128) >> 8) + 128;
+             }
+             i++;
 
-        }
-    }*/
+         }
+     }*/
 
 
-  // printf("End flip %f\n",(float)getcurrenttime2());
+    // printf("End flip %f\n",(float)getcurrenttime2());
 
     //memcpy(tmp_picture->data[0],data,width*height*4);
 
@@ -379,7 +393,7 @@ void MediaRecorder::EncodingThread()
             tmp_picture->data[0][(newindex)*4+0] = r;
             tmp_picture->data[0][(newindex)*4+1] = g;
             tmp_picture->data[0][(newindex)*4+2] = b; */
-        // }
+            // }
 
         }
         sws_scale(img_convert_ctx,tmp_picture->data,tmp_picture->linesize,0,height,picture->data,picture->linesize);
@@ -391,7 +405,7 @@ void MediaRecorder::EncodingThread()
         p.data = NULL;
         p.size = 0;
         picture->pts = int64_t((time-starttime)*1000.0);
-       // picture->pts = time*30.0;
+        // picture->pts = time*30.0;
         int got_frame;
         printf("%p %p\n",ctx, picture);
         if(avcodec_encode_video2(ctx, &p, picture, &got_frame) < 0) return;
@@ -405,9 +419,9 @@ void MediaRecorder::EncodingThread()
         }
         printf("End enc frame %f\n",(float)getcurrenttime2());
         pthread_mutex_lock(&sound_buffer_lock);
-       AVFrame * aframe = avcodec_alloc_frame();
-        
-        
+        AVFrame * aframe = avcodec_alloc_frame();
+
+
         while ( sound_buffers.size() > 0 )
         {
             printf("sound_buffers.size() = %d\n",sound_buffers.size());
@@ -419,15 +433,15 @@ void MediaRecorder::EncodingThread()
             aframe->sample_rate = 44100;
             aframe->channels = 2;
             aframe->channel_layout = actx->channel_layout;
-            
+
             aframe->format = AV_SAMPLE_FMT_S16;
-           //avcodec_fill_audio_frame(aframe,2,AV_SAMPLE_FMT_S16,(char*)buf,actx->frame_size*sizeof(short)*2,1);
+            //avcodec_fill_audio_frame(aframe,2,AV_SAMPLE_FMT_S16,(char*)buf,actx->frame_size*sizeof(short)*2,1);
             aframe->pkt_pos = -1;
             aframe->pts = AV_NOPTS_VALUE;
             av_init_packet(&p);
             p.data = NULL;
             p.size = 0;
-            
+
             audio_samples_written += actx->frame_size;//samples/2 each channel
             avcodec_encode_audio2(actx,&p,aframe,&got_frame);
             if ( got_frame )
@@ -447,5 +461,5 @@ void MediaRecorder::EncodingThread()
 
 bool MediaRecorder::isReady()
 {
-  return ready;
+    return ready;
 }
