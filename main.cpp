@@ -91,7 +91,9 @@ void (*glCompileShader_real)(int) = 0x0;
 void (*glAttachObjectARB_real)(int,int) = 0x0;
 int (*glCreateShader_real)(int) = 0x0;
 void (*glPushAttrib_real)(int) = 0x0;
-void (*glPopAttrib_real)(int) = 0x0;
+void (*glPushClientAttrib_real)(int) = 0x0;
+void (*glPopAttrib_real)() = 0x0;
+void (*glPopClientAttrib_real)() = 0x0;
 void (*glEnable_real)(int) = 0x0;
 void (*glDisable_real)(int) = 0x0;
 void (*glShaderSource_real)(int,unsigned int,const char **,const int*) = 0x0;
@@ -102,6 +104,29 @@ void (*XNextEvent_real)(void*,void*) = 0x0;
 void * GL_lib = 0x0;
 
 void * (*real_dlsym)(void * , const char *) = 0x0;
+
+
+void (*glGetIntegerv_real)(int, void *) = 0x0;
+void (*glViewport_real)(int,int,int,int) = 0x0;
+void (*glRenderMode_real)(int) = 0x0;
+void (*glDisableClientState_real)(int) = 0x0;
+void (*glActiveTexture_real)(int) = 0x0;
+void (*glMatrixMode_real)(int) = 0x0;
+void (*glPushMatrix_real)() = 0x0;
+void (*glLoadIdentity_real)() = 0x0;
+void (*glOrtho_real)(GLdouble,GLdouble,GLdouble,GLdouble,GLdouble,GLdouble) = 0x0;
+void (*glPopMatrix_real)() = 0x0;
+void (*glPolygonMode_real)(GLenum,GLenum) = 0x0;
+void (*glColor3f_real)(GLfloat,GLfloat,GLfloat) = 0x0;
+void (*glBegin_real)(GLenum) = 0x0;
+void (*glEnd_real)() = 0x0;
+void (*glVertex3f_real)(GLfloat,GLfloat,GLfloat) = 0x0;
+void (*glGenTextures_real)(GLsizei,GLuint*) = 0x0;
+void (*glBindTexture_real)(GLenum,GLint) = 0x0;
+void (*glCopyTexImage2D_real)(GLenum,GLint,GLenum,GLint,GLint,GLsizei,GLsizei,GLint) = 0x0;
+void (*glPixelStorei_real)(GLenum,GLint) = 0x0;
+void (*glGetTexImage_real)(GLenum,GLint,GLenum,GLenum,GLvoid *) = 0x0;
+#define getprocaddr(f) f##_real = real_dlsym(GL_lib,#f)
 
 int width = 0;
 int height = 0;
@@ -170,129 +195,156 @@ __attribute__((constructor)) void OnLoad()
     glXGetProcAddress_real = real_dlsym(GL_lib,"glXGetProcAddress");
     glXSwapBuffers_real = real_dlsym(GL_lib,"glXSwapBuffers");
     glPushAttrib_real = real_dlsym(GL_lib,"glPushAttrib");
+    glPushClientAttrib_real = real_dlsym(GL_lib,"glPushClientAttrib");
     glPopAttrib_real = real_dlsym(GL_lib,"glPopAttrib");
+    glPopClientAttrib_real = real_dlsym(GL_lib,"glPopClientAttrib");
     glEnable_real = real_dlsym(GL_lib,"glEnable");
     glDisable_real = real_dlsym(GL_lib,"glDisable");
     glXQueryDrawable_real = real_dlsym(GL_lib,"glXQueryDrawable");
     XNextEvent_real = real_dlsym(GL_lib,"XNextEvent");
+    
+    getprocaddr(glGetIntegerv);
+    getprocaddr(glViewport);
+    getprocaddr(glRenderMode);
+    getprocaddr(glDisableClientState);
+    getprocaddr(glActiveTexture);
+    getprocaddr(glMatrixMode);
+    getprocaddr(glLoadIdentity);
+    getprocaddr(glOrtho);
+    getprocaddr(glPushMatrix);
+    getprocaddr(glPopMatrix);
+    getprocaddr(glPolygonMode);
+    getprocaddr(glColor3f);
+    getprocaddr(glBegin);
+    getprocaddr(glEnd);
+    getprocaddr(glVertex3f);
+    getprocaddr(glGenTextures);
+    getprocaddr(glBindTexture);
+    getprocaddr(glCopyTexImage2D);
+    getprocaddr(glPixelStorei);
+    getprocaddr(glGetTexImage);
+    
+    
     init = true;
     lastframe = getcurrenttime();
+    
+    
 }
 GLint program;
 GLint viewport[4];
 void enterOverlayContext()
 {
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glPushClientAttrib(GL_ALL_ATTRIB_BITS);
+    glPushAttrib_real(GL_ALL_ATTRIB_BITS);
+    glPushClientAttrib_real(GL_ALL_ATTRIB_BITS);
 
 
 
-    glGetIntegerv(GL_VIEWPORT, viewport);
-    glGetIntegerv(GL_CURRENT_PROGRAM, &program);
-    glDisable(GL_ALPHA_TEST);
-    glDisable(GL_AUTO_NORMAL);
-    glViewport(0, 0, width, height);
+    glGetIntegerv_real(GL_VIEWPORT, viewport);
+    glGetIntegerv_real(GL_CURRENT_PROGRAM, &program);
+    glDisable_real(GL_ALPHA_TEST);
+    glDisable_real(GL_AUTO_NORMAL);
+    glViewport_real(0, 0, width, height);
     // Skip clip planes, there are thousands of them.
-    glDisable(GL_COLOR_LOGIC_OP);
-    glDisable(GL_COLOR_TABLE);
-    glDisable(GL_CONVOLUTION_1D);
-    glDisable(GL_CONVOLUTION_2D);
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_DITHER);
-    glDisable(GL_FOG);
-    glDisable(GL_HISTOGRAM);
-    glDisable(GL_INDEX_LOGIC_OP);
-    glDisable(GL_LIGHTING);
-    glDisable(GL_NORMALIZE);
+    glDisable_real(GL_COLOR_LOGIC_OP);
+    glDisable_real(GL_COLOR_TABLE);
+    glDisable_real(GL_CONVOLUTION_1D);
+    glDisable_real(GL_CONVOLUTION_2D);
+    glDisable_real(GL_CULL_FACE);
+    glDisable_real(GL_DEPTH_TEST);
+    glDisable_real(GL_DITHER);
+    glDisable_real(GL_FOG);
+    glDisable_real(GL_HISTOGRAM);
+    glDisable_real(GL_INDEX_LOGIC_OP);
+    glDisable_real(GL_LIGHTING);
+    glDisable_real(GL_NORMALIZE);
 
     // Skip line smmooth
     // Skip map
-    glDisable(GL_MINMAX);
+    glDisable_real(GL_MINMAX);
     // Skip polygon offset
-    glDisable(GL_SEPARABLE_2D);
-    glDisable(GL_SCISSOR_TEST);
-    glDisable(GL_STENCIL_TEST);
-    glDisable(GL_TEXTURE_CUBE_MAP);
-    glDisable(GL_VERTEX_PROGRAM_ARB);
-    glDisable(GL_FRAGMENT_PROGRAM_ARB);
-    glRenderMode(GL_RENDER);
+    glDisable_real(GL_SEPARABLE_2D);
+    glDisable_real(GL_SCISSOR_TEST);
+    glDisable_real(GL_STENCIL_TEST);
+    glDisable_real(GL_TEXTURE_CUBE_MAP);
+    glDisable_real(GL_VERTEX_PROGRAM_ARB);
+    glDisable_real(GL_FRAGMENT_PROGRAM_ARB);
+    glRenderMode_real(GL_RENDER);
 
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_NORMAL_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_INDEX_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisableClientState(GL_EDGE_FLAG_ARRAY);
+    glDisableClientState_real(GL_VERTEX_ARRAY);
+    glDisableClientState_real(GL_NORMAL_ARRAY);
+    glDisableClientState_real(GL_COLOR_ARRAY);
+    glDisableClientState_real(GL_INDEX_ARRAY);
+    glDisableClientState_real(GL_TEXTURE_COORD_ARRAY);
+    glDisableClientState_real(GL_EDGE_FLAG_ARRAY);
 
     GLint texunits = 1;
 
-    glGetIntegerv(GL_MAX_TEXTURE_UNITS, &texunits);
+    glGetIntegerv_real(GL_MAX_TEXTURE_UNITS, &texunits);
 
     for (int i=texunits-1; i>=0; --i) {
-        glActiveTexture(GL_TEXTURE0 + i);
-        glDisable(GL_TEXTURE_1D);
-        glDisable(GL_TEXTURE_2D);
-        glDisable(GL_TEXTURE_3D);
+        glActiveTexture_real(GL_TEXTURE0 + i);
+        glDisable_real(GL_TEXTURE_1D);
+        glDisable_real(GL_TEXTURE_2D);
+        glDisable_real(GL_TEXTURE_3D);
     }
 
-    glDisable(GL_TEXTURE_CUBE_MAP);
-    glDisable(GL_VERTEX_PROGRAM_ARB);
-    glDisable(GL_FRAGMENT_PROGRAM_ARB);
+    glDisable_real(GL_TEXTURE_CUBE_MAP);
+    glDisable_real(GL_VERTEX_PROGRAM_ARB);
+    glDisable_real(GL_FRAGMENT_PROGRAM_ARB);
 
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    glOrtho(0, width, height, 0, -100.0, 100.0);
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glLoadIdentity();
-    glEnable(GL_COLOR_MATERIAL);
+    glMatrixMode_real(GL_PROJECTION);
+    glPushMatrix_real();
+    glLoadIdentity_real();
+    glOrtho_real(0, width, height, 0, -100.0, 100.0);
+    glMatrixMode_real(GL_MODELVIEW);
+    glPushMatrix_real();
+    glLoadIdentity_real();
+    glEnable_real(GL_COLOR_MATERIAL);
 }
 void leaveOverlayContext()
 {
 
-    glMatrixMode(GL_MODELVIEW);
-    glPopMatrix();
+    glMatrixMode_real(GL_MODELVIEW);
+    glPopMatrix_real();
 
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
+    glMatrixMode_real(GL_PROJECTION);
+    glPopMatrix_real();
 
-    glPopClientAttrib();
-    glPopAttrib();
+    glPopClientAttrib_real();
+    glPopAttrib_real();
 
-    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+    glViewport_real(viewport[0], viewport[1], viewport[2], viewport[3]);
     glUseProgram_real(program);
 }
 void drawBoxInside(float x1,float y1,float w , float h)
 {
-    glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
+    glPolygonMode_real(GL_FRONT_AND_BACK,GL_FILL);
     if (!recording )
-        glColor3f(1.0,1.0,0.0);
+        glColor3f_real(1.0,1.0,0.0);
     else
-        glColor3f(1.0,0.0,0.0);
-    glBegin(GL_QUADS);
+        glColor3f_real(1.0,0.0,0.0);
+    glBegin_real(GL_QUADS);
     {
-        glVertex3f(x1,y1,0);
-        glVertex3f(x1+w,y1,0);
-        glVertex3f(x1+w,y1+h,0);
-        glVertex3f(x1,y1+h,0);
+        glVertex3f_real(x1,y1,0);
+        glVertex3f_real(x1+w,y1,0);
+        glVertex3f_real(x1+w,y1+h,0);
+        glVertex3f_real(x1,y1+h,0);
     }
-    glEnd();
+    glEnd_real();
    
 }
 void drawBoxOutside(float x1,float y1,float w , float h)
 {
-    glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
-    glColor3f(0.0,0.0,0.0);
-    glBegin(GL_QUADS);
+    glPolygonMode_real(GL_FRONT_AND_BACK,GL_LINE);
+    glColor3f_real(0.0,0.0,0.0);
+    glBegin_real(GL_QUADS);
     {
-        glVertex3f(x1,y1,0);
-        glVertex3f(x1+w,y1,0);
-        glVertex3f(x1+w,y1+h,0);
-        glVertex3f(x1,y1+h,0);
+        glVertex3f_real(x1,y1,0);
+        glVertex3f_real(x1+w,y1,0);
+        glVertex3f_real(x1+w,y1+h,0);
+        glVertex3f_real(x1,y1+h,0);
     }
-    glEnd();
+    glEnd_real();
 }
 #define SEGW 10.0f
 #define SEGH 30.0f
@@ -542,17 +594,17 @@ extern "C" {
         enterOverlayContext();
         if ( first_frame )
         {
-            glGenTextures(1,&cap_tex);
-            glGenTextures(1,&render_tex);
+            glGenTextures_real(1,&cap_tex);
+            glGenTextures_real(1,&render_tex);
             first_frame = false;
         }
         if ( recording )
         {
             if ( curr_mediarec->isReady() )
             {
-                glPixelStorei(GL_PACK_ALIGNMENT,4);
-                glBindTexture(GL_TEXTURE_2D,cap_tex);
-                glCopyTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,0,0,width,height,0);
+                glPixelStorei_real(GL_PACK_ALIGNMENT,4);
+                glBindTexture_real(GL_TEXTURE_2D,cap_tex);
+                glCopyTexImage2D_real(GL_TEXTURE_2D,0,GL_RGBA,0,0,width,height,0);
             }
 
         }
@@ -593,9 +645,9 @@ extern "C" {
             glTexCoord2f(0,1);
             glVertex3f(0,height,0);
             glEnd();*/
-            glBindTexture(GL_TEXTURE_2D,cap_tex);
+            glBindTexture_real(GL_TEXTURE_2D,cap_tex);
        //     glCopyTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,0,0,width,height,0);
-            glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,data);
+            glGetTexImage_real(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,data);
             //memset(data,width*height*4,125);
             pthread_mutex_lock(&mediarecord_mutex);
             curr_mediarec->AppendFrame(0.0,width,height,data);//POINTER MUST BE VALID UNTIL NEXT FRAME
