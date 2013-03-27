@@ -50,6 +50,7 @@ private:
     pa_simple* s;
     AVCodec* acodec;
     AVCodecContext* actx;
+    long audio_samples_written;
     
 };
 

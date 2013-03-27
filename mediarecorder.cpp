@@ -131,11 +131,19 @@ void MediaRecorder::RecordingThread()
     while ( run )
     {
 
-        printf("Read 1024 samples\n");
-        short * buf = new short[1024];
-        int ret = pa_simple_read(s,buf,1024*2,&error);
+        printf("Read %d samples\n",actx->frame_size*2);
+        short * buf = new short[actx->frame_size*2];
+        int ret = pa_simple_read(s,buf,actx->frame_size*4,&error);
         if ( ret < 0 )
+        {
             printf("Error audio\n");
+            delete[] buf;
+            continue;
+        }
+        for ( int i = 0; i < actx->frame_size*2; i++ )
+        {
+            buf[i] = short(float(buf[i])*0.8);
+        }
         pthread_mutex_lock(&sound_buffer_lock);
         sound_buffers.push_back(buf);
         pthread_mutex_unlock(&sound_buffer_lock);
@@ -148,7 +156,7 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     /* INIT SOUND RECORDING */
     
     
-    
+    audio_samples_written = 0;
     pa_context* pactx;
     pa_mainloop * m = pa_mainloop_new();
     m_api = pa_mainloop_get_api(m);
@@ -183,7 +191,7 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     pthread_mutex_init(&sound_buffer_lock,NULL);
     pthread_cond_init(&encode_cond,NULL);
     pthread_create(&encode_thread,NULL,(void*(*)(void*))&MediaRecorder::EncodingThread,this);
-    pthread_create(&record_sound_thread,NULL,(void*(*)(void*))&MediaRecorder::RecordingThread,this);
+    
 
     av_log_set_level(AV_LOG_DEBUG);
     outCtx = avformat_alloc_context();
@@ -191,7 +199,7 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     outCtx->oformat = av_guess_format(NULL, outfile, NULL);
     snprintf(outCtx->filename, sizeof(outCtx->filename), "%s", outfile);
     codec = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
-    acodec = avcodec_find_encoder(AV_CODEC_ID_PCM_S16LE);
+    acodec = avcodec_find_encoder(AV_CODEC_ID_MP2);
     ctx = avcodec_alloc_context3(codec);
     actx = avcodec_alloc_context3(acodec);
     avcodec_get_context_defaults3(actx,acodec);
@@ -215,6 +223,8 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     actx->channels = 2;
     actx->time_base.den = 44100;
     actx->time_base.num = 1;
+    actx->bit_rate = 128000;
+    
    /* ctx->compression_level = 0;
     ctx->trellis = 0;
     ctx->gop_size = 1; /* emit one intra frame every ten frames */
@@ -246,6 +256,8 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     if (avcodec_open2(actx, acodec, NULL) < 0) {
         fprintf(stderr, "Could not open audio codec\n");
     }
+    printf("frame_size: %d\n",actx->frame_size);
+    pthread_create(&record_sound_thread,NULL,(void*(*)(void*))&MediaRecorder::RecordingThread,this);
     AVStream* s = av_new_stream(outCtx,0);
     s->codec = ctx;
     s->r_frame_rate.den = 1000.0;
@@ -402,10 +414,21 @@ void MediaRecorder::EncodingThread()
             short * buf = sound_buffers.front();
             sound_buffers.pop_front();
             avcodec_get_frame_defaults(aframe);
-            avcodec_fill_audio_frame(aframe,actx->channels,actx->sample_fmt,(char*)buf,1024*2,0 );
+            aframe->data[0] = (char*)buf;
+            aframe->nb_samples = actx->frame_size;
+            aframe->sample_rate = 44100;
+            aframe->channels = 2;
+            aframe->channel_layout = actx->channel_layout;
+            
+            aframe->format = AV_SAMPLE_FMT_S16;
+           //avcodec_fill_audio_frame(aframe,2,AV_SAMPLE_FMT_S16,(char*)buf,actx->frame_size*sizeof(short)*2,1);
+            aframe->pkt_pos = -1;
+            aframe->pts = AV_NOPTS_VALUE;
             av_init_packet(&p);
             p.data = NULL;
             p.size = 0;
+            
+            audio_samples_written += actx->frame_size;//samples/2 each channel
             avcodec_encode_audio2(actx,&p,aframe,&got_frame);
             if ( got_frame )
             {
