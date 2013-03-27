@@ -10,6 +10,85 @@ extern "C" {
 #include <pthread.h>
 #include <sys/time.h>
 #include "mediarecorder.h"
+#include <iostream>
+#include <string>
+#include <map>
+
+
+pa_mainloop_api * m_api;
+
+static void get_server_info_callback(pa_context *c, const pa_server_info *i, void *userdata) {
+    printf("Default sink: %s\n", i->default_sink_name);
+    ((MediaRecorder*)userdata)->defaultsink = i->default_sink_name;
+    m_api->quit(m_api,1);
+}
+static void get_sink_info_callback(pa_context *c, const pa_sink_info *i, int is_last, void *userdata) {
+
+    if ( is_last )
+    {
+        pa_operation_unref(pa_context_get_server_info(c, get_server_info_callback, userdata));
+        return;
+    }
+    printf("Sink: %s - %s\n",i->description,i->name);
+}
+static void get_source_info_callback(pa_context *c, const pa_source_info *i, int is_last, void *userdata) {
+    if ( is_last )
+    {
+        pa_operation_unref(pa_context_get_sink_info_list(c, get_sink_info_callback, userdata));
+        return;
+    }
+    printf("Source: %s - name: %s\n",i->description,i->name);
+    if ( i->monitor_of_sink != PA_INVALID_INDEX )
+    {
+        printf("[ISMONITOR] of %s\n",i->monitor_of_sink_name);
+        ((MediaRecorder*)userdata)->monitorsources.insert(std::pair<std::string,std::string>(i->monitor_of_sink_name,i->name));
+    }
+}
+static void context_state_callback(pa_context *c, void *userdata) {
+    if ( pa_context_get_state(c) == PA_CONTEXT_READY )
+    {
+        pa_operation_unref(pa_context_get_source_info_list(c, get_source_info_callback, userdata));
+    }
+}
+
+
+/*int main(int argc, char **argv) {
+
+    pa_context* ctx;
+    pa_mainloop * m = pa_mainloop_new();
+    m_api = pa_mainloop_get_api(m);
+    ctx = pa_context_new(m_api,"Rec1");
+    if ( pa_context_connect(ctx,NULL,(pa_context_flags_t)0,NULL) < 0 )
+        printf("Cannot connect to pulseaudio\n");
+    int ret;
+    pa_context_set_state_callback(ctx, context_state_callback, NULL);
+    pa_mainloop_run(m,&ret);
+    
+    std::cout << "Use source: " << monitorsources[defaultsink] << std::endl;
+    
+    static const pa_sample_spec ss = {
+        .format = PA_SAMPLE_S16LE,
+        .rate = 44100,
+        .channels = 2
+    };
+    pa_context_disconnect(ctx);
+    int error;
+    pa_simple * s = pa_simple_new(NULL,"GLCAP Record",PA_STREAM_RECORD,monitorsources[defaultsink].c_str(), "record", &ss, NULL,NULL , &error);
+    if ( !s )
+    {
+        printf("Cannot create pa_simple\n");
+    }
+    FILE * f = fopen("out.raw","wb");
+    char buf[1024];
+    for (;;)
+    {
+        pa_simple_read(s,buf,sizeof(buf),&error);
+        fwrite(buf,1024,1,f);
+        
+    }
+    return 0;
+}*/
+
 
 double getcurrenttime2()
 {
@@ -46,23 +125,76 @@ static AVFrame *alloc_picture(int pix_fmt, int width, int height)
 #define AV_CODEC_ID_MPEG4 CODEC_ID_MPEG4
 #endif
 
+void MediaRecorder::RecordingThread()
+{
+    int error;
+    while ( run )
+    {
+
+        printf("Read 1024 samples\n");
+        short * buf = new short[1024];
+        int ret = pa_simple_read(s,buf,1024*2,&error);
+        if ( ret < 0 )
+            printf("Error audio\n");
+        pthread_mutex_lock(&sound_buffer_lock);
+        sound_buffers.push_back(buf);
+        pthread_mutex_unlock(&sound_buffer_lock);
+    }
+}
+
+
 MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
 {
+    /* INIT SOUND RECORDING */
+    
+    
+    
+    pa_context* pactx;
+    pa_mainloop * m = pa_mainloop_new();
+    m_api = pa_mainloop_get_api(m);
+    pactx = pa_context_new(m_api,"Rec1");
+    if ( pa_context_connect(pactx,NULL,(pa_context_flags_t)0,NULL) < 0 )
+        printf("Cannot connect to pulseaudio\n");
+    int ret;
+    pa_context_set_state_callback(pactx, context_state_callback, this);
+    pa_mainloop_run(m,&ret);
+    std::cout << "Use source: " << monitorsources[defaultsink] << std::endl;
+    
+    static const pa_sample_spec ss = {
+        .format = PA_SAMPLE_S16LE,
+        .rate = 44100,
+        .channels = 2
+    };
+    pa_context_disconnect(pactx);
+    
+    int error;
+    s = pa_simple_new(NULL,"GLCAP Record",PA_STREAM_RECORD,monitorsources[defaultsink].c_str(), "record", &ss, NULL,NULL , &error);
+    if ( !s )
+    {
+        printf("Cannot create pa_simple\n");
+    }
+    
     run = true;
     ready = false;
     firstframe = true;
     this->width = width;
     this->height = height;
     pthread_mutex_init(&encode_mutex,NULL);
-    pthread_create(&encode_thread,NULL,(void*(*)(void*))&MediaRecorder::EncodingThread,this);
+    pthread_mutex_init(&sound_buffer_lock,NULL);
     pthread_cond_init(&encode_cond,NULL);
+    pthread_create(&encode_thread,NULL,(void*(*)(void*))&MediaRecorder::EncodingThread,this);
+    pthread_create(&record_sound_thread,NULL,(void*(*)(void*))&MediaRecorder::RecordingThread,this);
+
     av_log_set_level(AV_LOG_DEBUG);
     outCtx = avformat_alloc_context();
 
     outCtx->oformat = av_guess_format(NULL, outfile, NULL);
     snprintf(outCtx->filename, sizeof(outCtx->filename), "%s", outfile);
     codec = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
+    acodec = avcodec_find_encoder(AV_CODEC_ID_PCM_S16LE);
     ctx = avcodec_alloc_context3(codec);
+    actx = avcodec_alloc_context3(acodec);
+    avcodec_get_context_defaults3(actx,acodec);
     //avcodec_get_context_defaults3(ctx,codec);
     ctx->width = width;
     ctx->height = height;
@@ -78,6 +210,11 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     ctx->global_quality = 100;
     ctx->lowres = 0;
     ctx->bit_rate_tolerance = 100000;
+    actx->sample_fmt = AV_SAMPLE_FMT_S16;
+    actx->sample_rate = 44100;
+    actx->channels = 2;
+    actx->time_base.den = 44100;
+    actx->time_base.num = 1;
    /* ctx->compression_level = 0;
     ctx->trellis = 0;
     ctx->gop_size = 1; /* emit one intra frame every ten frames */
@@ -106,11 +243,16 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     if (avcodec_open2(ctx, codec, NULL) < 0) {
         fprintf(stderr, "Could not open codec\n");
     }
+    if (avcodec_open2(actx, acodec, NULL) < 0) {
+        fprintf(stderr, "Could not open audio codec\n");
+    }
     AVStream* s = av_new_stream(outCtx,0);
     s->codec = ctx;
     s->r_frame_rate.den = 1000.0;
     s->r_frame_rate.num = 1;
-
+    AVStream* as = av_new_stream(outCtx,1);
+    as->codec = actx;
+    
     picture = alloc_picture(PIX_FMT_YUV420P, ctx->width, ctx->height);
     if (!picture) {
         fprintf(stderr, "Could not allocate picture\n");
@@ -146,10 +288,13 @@ MediaRecorder::~MediaRecorder()
     pthread_cond_broadcast(&encode_cond);
     printf("Joining thread..\n");
     pthread_join(encode_thread,NULL);
+    printf("Joining recording thread..\n");
+    pthread_join(record_sound_thread,NULL);
     printf("Done\n");
     av_write_trailer(outCtx);
     av_free(picture);
     avformat_free_context(outCtx);
+    pa_simple_free(s);
 }
 int fcount = 0;
 void MediaRecorder::AppendFrame(float time, int width, int height, char* data)
@@ -247,7 +392,33 @@ void MediaRecorder::EncodingThread()
             av_free_packet(&p);
         }
         printf("End enc frame %f\n",(float)getcurrenttime2());
-
+        pthread_mutex_lock(&sound_buffer_lock);
+       AVFrame * aframe = avcodec_alloc_frame();
+        
+        
+        while ( sound_buffers.size() > 0 )
+        {
+            printf("sound_buffers.size() = %d\n",sound_buffers.size());
+            short * buf = sound_buffers.front();
+            sound_buffers.pop_front();
+            avcodec_get_frame_defaults(aframe);
+            avcodec_fill_audio_frame(aframe,actx->channels,actx->sample_fmt,(char*)buf,1024*2,0 );
+            av_init_packet(&p);
+            p.data = NULL;
+            p.size = 0;
+            avcodec_encode_audio2(actx,&p,aframe,&got_frame);
+            if ( got_frame )
+            {
+                p.stream_index = 1;
+                p.flags |= AV_PKT_FLAG_KEY;
+                av_interleaved_write_frame(outCtx,&p);
+                av_free_packet(&p);
+            }
+            //printf("Consumed 1024 samples\n");
+            delete[] buf;
+        }
+        avcodec_free_frame(&aframe);
+        pthread_mutex_unlock(&sound_buffer_lock);
     }
 }
 
