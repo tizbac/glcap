@@ -27,8 +27,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <link.h>
 #include <vector>
 #include <pthread.h>
+#define glFlush glFlush_nouse
 #include <GL/gl.h>
 #include <GL/glext.h>
+#undef glFlush
 #define XNextEvent _XNextEvent
 #include <X11/Xlib.h>
 #include <X11/keysymdef.h>
@@ -126,6 +128,8 @@ void (*glBindTexture_real)(GLenum,GLint) = 0x0;
 void (*glCopyTexImage2D_real)(GLenum,GLint,GLenum,GLint,GLint,GLsizei,GLsizei,GLint) = 0x0;
 void (*glPixelStorei_real)(GLenum,GLint) = 0x0;
 void (*glGetTexImage_real)(GLenum,GLint,GLenum,GLenum,GLvoid *) = 0x0;
+void (*glColor4f_real)(GLfloat,GLfloat,GLfloat,GLfloat) = 0x0;
+void (*glDrawBuffer_real)(GLenum) = 0x0;
 #define getprocaddr(f) f##_real = real_dlsym(GL_lib,#f)
 
 int width = 0;
@@ -223,8 +227,8 @@ __attribute__((constructor)) void OnLoad()
     getprocaddr(glCopyTexImage2D);
     getprocaddr(glPixelStorei);
     getprocaddr(glGetTexImage);
-    
-    
+    getprocaddr(glColor4f);
+    getprocaddr(glDrawBuffer);
     init = true;
     lastframe = getcurrenttime();
     
@@ -236,11 +240,13 @@ void enterOverlayContext()
 {
     glPushAttrib_real(GL_ALL_ATTRIB_BITS);
     glPushClientAttrib_real(GL_ALL_ATTRIB_BITS);
-
+   
 
 
     glGetIntegerv_real(GL_VIEWPORT, viewport);
     glGetIntegerv_real(GL_CURRENT_PROGRAM, &program);
+    
+    glUseProgram_real(0);
     glDisable_real(GL_ALPHA_TEST);
     glDisable_real(GL_AUTO_NORMAL);
     glViewport_real(0, 0, width, height);
@@ -268,6 +274,7 @@ void enterOverlayContext()
     glDisable_real(GL_TEXTURE_CUBE_MAP);
     glDisable_real(GL_VERTEX_PROGRAM_ARB);
     glDisable_real(GL_FRAGMENT_PROGRAM_ARB);
+    glDisable_real(GL_BLEND);
     glRenderMode_real(GL_RENDER);
 
     glDisableClientState_real(GL_VERTEX_ARRAY);
@@ -300,6 +307,8 @@ void enterOverlayContext()
     glPushMatrix_real();
     glLoadIdentity_real();
     glEnable_real(GL_COLOR_MATERIAL);
+    glColor4f_real(1,1,1,1);
+     glDrawBuffer_real(GL_BACK);
 }
 void leaveOverlayContext()
 {
@@ -689,6 +698,10 @@ extern "C" {
 
         }
     }
+   /* void glFlush()
+    {
+        
+    }*/
 }
 
 
@@ -715,7 +728,8 @@ static void *_dlopen(const char *filename, int flag)
 
 #define DL_DEFS \
     DL_DECLSYM(glXSwapBuffers)\
-    DL_DECLSYM(XNextEvent)
+    DL_DECLSYM(XNextEvent)\
+
 
 
 
