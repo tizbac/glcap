@@ -348,10 +348,10 @@ void drawBoxOutside(float x1,float y1,float w , float h)
     glColor3f_real(0.0,0.0,0.0);
     glBegin_real(GL_QUADS);
     {
-        glVertex3f_real(x1,y1,0);
-        glVertex3f_real(x1+w,y1,0);
-        glVertex3f_real(x1+w,y1+h,0);
-        glVertex3f_real(x1,y1+h,0);
+        glVertex3f_real(x1-0.5,y1-0.5,0);
+        glVertex3f_real(x1+w+0.5,y1-0.5,0);
+        glVertex3f_real(x1+w+0.5,y1+h+0.5,0);
+        glVertex3f_real(x1,y1+h+0.5,0);
     }
     glEnd_real();
 }
@@ -681,11 +681,14 @@ extern "C" {
                 if ( recording )
                 {
                     
-                    char * homedir = getenv("HOME"); 
+                    char * homedir = getenv("GLCAP_OUT");
                     char date[512];
                     strftime_c(date,511,"%F %r");
                     char filename[1024];
-                    sprintf(filename,"%s/GLCAP %s.avi",homedir,date);
+		    if ( strlen(homedir) > 0 )
+		      sprintf(filename,"%s/GLCAP %s.avi",homedir,date);
+		    else
+		      sprintf(filename,"./GLCAP %s.avi",date);
                     curr_mediarec = new MediaRecorder(filename,width,height);
                 }
                 if ( !recording )

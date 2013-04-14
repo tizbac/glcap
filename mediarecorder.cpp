@@ -220,7 +220,7 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     //avcodec_get_context_defaults3(ctx,codec);
     ctx->width = width;
     ctx->height = height;
-    ctx->bit_rate = 4000*1000;
+    ctx->bit_rate = 6000*1000;
     ctx->time_base.den = 1000.0;
     ctx->time_base.num = 1;
     ctx->thread_count = 4;
@@ -231,11 +231,11 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     ctx->me_method = 1;
     ctx->global_quality = 100;
     ctx->lowres = 0;
-    ctx->bit_rate_tolerance = 100000;
+    ctx->bit_rate_tolerance = 200000;
     actx->sample_fmt = AV_SAMPLE_FMT_S16;
     actx->sample_rate = 44100;
     actx->channels = 2;
-    actx->time_base.den = 44100;
+    actx->time_base.den = 1000;
     actx->time_base.num = 1;
     actx->bit_rate = 128000;
 
@@ -437,7 +437,7 @@ void MediaRecorder::EncodingThread()
             aframe->format = AV_SAMPLE_FMT_S16;
             //avcodec_fill_audio_frame(aframe,2,AV_SAMPLE_FMT_S16,(char*)buf,actx->frame_size*sizeof(short)*2,1);
             aframe->pkt_pos = -1;
-            aframe->pts = AV_NOPTS_VALUE;
+            aframe->pts = (double(audio_samples_written)/double(aframe->sample_rate))*1000.0;
             av_init_packet(&p);
             p.data = NULL;
             p.size = 0;
@@ -455,6 +455,7 @@ void MediaRecorder::EncodingThread()
             delete[] buf;
         }
         avcodec_free_frame(&aframe);
+        
         pthread_mutex_unlock(&sound_buffer_lock);
     }
 }
