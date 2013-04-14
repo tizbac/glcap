@@ -3,7 +3,8 @@ glcap
 
 Linux Fraps clone, it allows recording on any opengl context
 
-
+To build it you need libavcodec and related VERSION 54 , older WON'T WORK
+ , libpulse header files and libpulse-simple header files
 Usage: once you have compiled it, launch the game/application with the environment variable LD_PRELOAD set to full path to libGLCAP.so
 Press F12 to start recording and stop
 Video files will be saved on your home directory
