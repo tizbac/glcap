@@ -685,7 +685,7 @@ extern "C" {
                     char date[512];
                     strftime_c(date,511,"%F %r");
                     char filename[1024];
-		    if ( strlen(homedir) > 0 )
+		    if ( homedir && strlen(homedir) > 0 )
 		      sprintf(filename,"%s/GLCAP %s.avi",homedir,date);
 		    else
 		      sprintf(filename,"./GLCAP %s.avi",date);

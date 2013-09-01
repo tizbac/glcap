@@ -1,6 +1,6 @@
 project(GLCAP)
 cmake_minimum_required(VERSION 2.8)
-include_directories(/usr/include/libavcodec /usr/include/libavformat /usr/include/libswscale )
+include_directories(/usr/include/libavcodec /usr/include/libavformat /usr/include/libswscale /usr/include/ffmpeg/libavcodec /usr/include/ffmpeg/libavformat /usr/include/ffmpeg/libswscale /usr/include/ffmpeg )
 link_directories( /usr/local/lib )
 add_library(${PROJECT_NAME} SHARED mediarecorder.cpp main.cpp)
 
