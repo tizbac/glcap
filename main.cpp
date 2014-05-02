@@ -39,6 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "mediarecorder.h"
 #include <sys/time.h>
 MediaRecorder * curr_mediarec = NULL;
+extern char *program_invocation_name;
 //f
 size_t strftime_c(char *s, size_t max, const char *format)
 {
@@ -134,15 +135,25 @@ void (*glDrawBuffer_real)(GLenum) = 0x0;
 
 int width = 0;
 int height = 0;
-
+unsigned long long framecounter = 0;
+unsigned long long lasteventframe = 0;
 pthread_mutex_t mediarecord_mutex;
-
+bool glcap_disabled = false;
 __attribute__((constructor)) void OnLoad()
 {
+
+    printf("\033[34mGL_CAP\033[0m, Process Name: %s\n",program_invocation_name);
+    XInitThreads();
+    int l = strlen(program_invocation_name);
+    if ( l >= 5 && strcmp(&program_invocation_name[l-5],"steam") == 0 )
+    {
+        printf("Ignoring steam\n");
+        glcap_disabled = true;
+        return;
+    }
     pthread_mutex_init(&mediarecord_mutex,NULL);
     av_register_all();
     avcodec_register_all();
-    printf("\033[34mGL_OPTIMIZER\033[0m\n");
     ElfW(Sym) * stab = NULL;
 
     void * libdl_handle = dlopen("libdl.so.2",RTLD_LAZY);
@@ -599,7 +610,7 @@ extern "C" {
             printf("width=%d,height=%d\n",width,height);
 
         }
-
+        framecounter++;
         enterOverlayContext();
         if ( first_frame )
         {
@@ -672,9 +683,14 @@ extern "C" {
         XNextEvent_real(display,event);
         if ( event->type == KeyPress  )
         {
-            // printf("%x\n",event->xkey.keycode);
+            printf("%x\n",event->xkey.keycode);
             if ( event->xkey.keycode == 0x60 /*F12*/)
             {
+                if ( lasteventframe+1 >= framecounter )
+                {
+                    return;
+                }
+                lasteventframe = framecounter;
                 recording = !recording;
                 pthread_mutex_lock(&mediarecord_mutex);
 

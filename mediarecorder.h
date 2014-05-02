@@ -51,6 +51,7 @@ private:
     AVCodec* acodec;
     AVCodecContext* actx;
     long audio_samples_written;
+    bool audiofailed;
     
 };
 

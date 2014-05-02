@@ -31,7 +31,7 @@ extern "C" {
 #include <stdio.h>
 FILE * debug_samples_out;
 pa_mainloop_api * m_api;
-
+#define TIMEBASE 600.0
 static void get_server_info_callback(pa_context *c, const pa_server_info *i, void *userdata) {
     printf("Default sink: %s\n", i->default_sink_name);
     ((MediaRecorder*)userdata)->defaultsink = i->default_sink_name;
@@ -151,9 +151,9 @@ void MediaRecorder::RecordingThread()
         int ret = pa_simple_read(s,buf,actx->frame_size*4,&error);
         if ( ret < 0 )
         {
-            printf("Error audio\n");
+            printf("Sound crashed\n");
             delete[] buf;
-            continue;
+            break;
         }
         for ( int i = 0; i < actx->frame_size*2; i++ )
         {
@@ -169,6 +169,7 @@ void MediaRecorder::RecordingThread()
 
 MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
 {
+    audiofailed = false;
     /* INIT SOUND RECORDING */
 
     debug_samples_out = fopen("audiosamples.s16","wb");
@@ -219,12 +220,16 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     ctx = avcodec_alloc_context3(codec);
     actx = avcodec_alloc_context3(acodec);
     avcodec_get_context_defaults3(actx,acodec);
-    //avcodec_get_context_defaults3(ctx,codec);
+    avcodec_get_context_defaults3(ctx,codec);
     ctx->width = width;
     ctx->height = height;
     ctx->bit_rate = 6000*1000;
-    ctx->time_base.den = 1000.0;
+    
+    std::cout << ctx->time_base.den << " " << ctx->time_base.num << std::endl;
+    
+    ctx->time_base.den = TIMEBASE;
     ctx->time_base.num = 1;
+
     ctx->thread_count = 4;
     ctx->qmin = 2;
     ctx->qmax = 31;
@@ -233,6 +238,7 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     ctx->me_method = 1;
     ctx->global_quality = 100;
     ctx->lowres = 0;
+    
     ctx->bit_rate_tolerance = 200000;
     actx->sample_fmt = AV_SAMPLE_FMT_S16;
     actx->sample_rate = 44100;
@@ -240,7 +246,8 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     actx->time_base.den = 44100;
     actx->time_base.num = 1;
     actx->bit_rate = 128000;
-
+    actx->frame_size = 8192;
+    actx->channel_layout = 3;
     /* ctx->compression_level = 0;
      ctx->trellis = 0;
      ctx->gop_size = 1; /* emit one intra frame every ten frames */
@@ -271,17 +278,22 @@ MediaRecorder::MediaRecorder(const char * outfile,int width, int height)
     }
     if (avcodec_open2(actx, acodec, NULL) < 0) {
         fprintf(stderr, "Could not open audio codec\n");
+        audiofailed = true;
     }
     printf("frame_size: %d\n",actx->frame_size);
     pthread_create(&record_sound_thread,NULL,(void*(*)(void*))&MediaRecorder::RecordingThread,this);
     AVStream* s = av_new_stream(outCtx,0);
     s->codec = ctx;
-    s->r_frame_rate.den = 1000.0;
+    s->r_frame_rate.den = TIMEBASE;
     s->r_frame_rate.num = 1;
+    if (!audiofailed )
+    {
     AVStream* as = av_new_stream(outCtx,1);
     as->codec = actx;
     as->r_frame_rate.den = 44100;
     as->r_frame_rate.num = 1;
+    
+    }
     picture = alloc_picture(PIX_FMT_YUV420P, ctx->width, ctx->height);
     if (!picture) {
         fprintf(stderr, "Could not allocate picture\n");
@@ -329,6 +341,8 @@ MediaRecorder::~MediaRecorder()
 int fcount = 0;
 void MediaRecorder::AppendFrame(float time, int width, int height, char* data)
 {
+    if ( !ready )
+        return ;
     printf("AppendFrame\n");
     this->time = getcurrenttime2();
     if ( firstframe )
@@ -339,8 +353,9 @@ void MediaRecorder::AppendFrame(float time, int width, int height, char* data)
     this->height = height;
     this->width = width;
     m_data = data;
+    ready = false;
     pthread_cond_broadcast(&encode_cond);
-
+    
     /*int i = 0;
      unsigned int numpixels = width * height;
      unsigned int ui = numpixels;
@@ -377,7 +392,7 @@ void MediaRecorder::EncodingThread()
         printf("Encode thread ready\n");
         ready = true;
         pthread_cond_wait(&encode_cond,&encode_mutex);
-        ready = false;
+        
         if (!run)
         {
             printf("Encoding finished\n");
@@ -408,8 +423,10 @@ void MediaRecorder::EncodingThread()
         av_init_packet(&p);
         p.data = NULL;
         p.size = 0;
-        picture->pts = int64_t((time-starttime)*1000.0);
+        picture->pts = int64_t((time-starttime)*TIMEBASE);
+        
         uint64_t vpts = picture->pts;
+     
         // picture->pts = time*30.0;
         int got_frame;
         printf("%p %p\n",ctx, picture);
@@ -418,8 +435,9 @@ void MediaRecorder::EncodingThread()
         {
 
             // outContainer is "mp4"
+
             p.pts = vpts;
-            p.dts = vpts;
+            p.dts = AV_NOPTS_VALUE;
             av_write_frame(outCtx, &p);
 
             av_free_packet(&p);
@@ -427,9 +445,10 @@ void MediaRecorder::EncodingThread()
         //sleep(1);
         printf("End enc frame %f, pts %lld\n",(float)getcurrenttime2(),picture->pts);
         
+       
         AVFrame * aframe = avcodec_alloc_frame();
 
-        pthread_mutex_lock(&sound_buffer_lock);
+        
         bool unlocked = false;
         
         while ( sound_buffers.size() > 0 )
@@ -437,44 +456,47 @@ void MediaRecorder::EncodingThread()
             uint64_t apts = audio_samples_written;
            /* if ( apts > vpts )
                 break;*/
+            pthread_mutex_lock(&sound_buffer_lock);
             short * buf = sound_buffers.front();
             sound_buffers.pop_front();
             pthread_mutex_unlock(&sound_buffer_lock);
-            
-            
-            
-            unlocked = true;
-            avcodec_get_frame_defaults(aframe);
-            aframe->data[0] = (char*)buf;
-            aframe->nb_samples = actx->frame_size;
-            aframe->sample_rate = 44100;
-            aframe->channels = 2;
-            aframe->channel_layout = actx->channel_layout;
-            
-            aframe->format = AV_SAMPLE_FMT_S16;
-            //avcodec_fill_audio_frame(aframe,2,AV_SAMPLE_FMT_S16,(char*)buf,actx->frame_size*sizeof(short)*2,1);
-            aframe->pkt_pos = -1;
-            aframe->pts = apts;
-            printf("sound_buffers.size() = %d\n",sound_buffers.size());
-            av_init_packet(&p);
-            p.data = NULL;
-            p.size = 0;
-
-            audio_samples_written += actx->frame_size;//samples/2 each channel
-            avcodec_encode_audio2(actx,&p,aframe,&got_frame);
-            if ( got_frame )
+             if (!audiofailed )
             {
-                p.stream_index = 1;
-                p.flags |= AV_PKT_FLAG_KEY;
-                p.pts = apts;
-                av_write_frame(outCtx,&p);
-                av_free_packet(&p);
+                
+                
+                unlocked = true;
+                aframe->nb_samples = actx->frame_size;
+                aframe->channel_layout = actx->channel_layout;
+                aframe->format = AV_SAMPLE_FMT_S16;
+                aframe->channels = actx->channels;
+                avcodec_fill_audio_frame(aframe,actx->channels,AV_SAMPLE_FMT_S16,(char*)buf,actx->frame_size*2*2,0);
+              //  avcodec_fill_audio_frame(aframe,actx->channels,actx->sample_fmt,(char*)buf,actx->frame_size*2,0);
+    
+                printf("sound_buffers.size() = %d\n",sound_buffers.size());
+                av_init_packet(&p);
+                p.data = NULL;
+                p.size = 0;
+
+                
+                avcodec_encode_audio2(actx,&p,aframe,&got_frame);
+                if ( got_frame )
+                {
+                    p.stream_index = 1;
+                    p.flags |= AV_PKT_FLAG_KEY;
+                    
+                    
+
+                    av_write_frame(outCtx,&p);
+                    av_free_packet(&p);
+                }
+                audio_samples_written += actx->frame_size;//samples/2 each channel
             }
             //printf("Consumed 1024 samples\n");
             delete[] buf;
+            
         }
-        if ( !unlocked )
-            pthread_mutex_unlock(&sound_buffer_lock);
+/*        if ( !unlocked )
+            pthread_mutex_unlock(&sound_buffer_lock);*/
         avcodec_free_frame(&aframe);
         
     }
